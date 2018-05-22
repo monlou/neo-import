@@ -1,6 +1,7 @@
 from neo4j.v1 import GraphDatabase
 
 # Connect to Neo4j
+print("Connecting to database")
 uri = "bolt://localhost:7687/db"
 driver = GraphDatabase.driver(uri, encryption=(False))
 
@@ -11,6 +12,7 @@ reserves_file = "file:///CSVs/marine_reserves.csv"
 
 # Upload CSV files to Graph Database
 def upload_csv():
+    print("Uploading CSV files")
     # Create transaction string
     load_csv = "LOAD CSV WITH HEADERS FROM '"
     reserve_db_setup = """' AS row 
@@ -19,6 +21,7 @@ def upload_csv():
                    n.PA_ID = row.paID,
                    n.NAME = row.name,
                    n.TYPE = row.type,
+                   n.GAZ_AREA = row.gazArea,
                    n.GAZ_DATE = row.gazDate,
                    n.LATEST_GAZ = row.latestGaz,
                    n.AUTHORITY = row.authority,
@@ -53,6 +56,7 @@ def upload_csv():
             upload.run(reserves_csv)
 
 def indexes():
+    print("Creating indexes")
     fish_indexes = ["CREATE INDEX ON :Fishes(scientificName);",
                     "CREATE INDEX ON :Fishes(recordID);",
                     "CREATE INDEX ON :Fishes(decimalLatitude);",
@@ -63,7 +67,7 @@ def indexes():
                     "CREATE INDEX ON :Reserves(type);",
                     "CREATE INDEX ON :Reserves(xCoord);",
                     "CREATE INDEX ON :Reserves(yCoord);",
-                    "CREATE INDEX ON :Reserves(shapeArea);"]
+                    "CREATE INDEX ON :Reserves(gazArea);"]
     with driver.session() as session:
         with session.begin_transaction() as index:
             for i in fish_indexes:
@@ -73,6 +77,7 @@ def indexes():
 
 # Add relationships between related fish
 def relationships():
+    print("Building relationships")
     create_same = """MATCH (n1:Fishes),(n2:Fishes)
                         WHERE n1.scientificName = n2.scientificName 
                         AND NOT n1.recordID = n2.recordID
@@ -82,15 +87,20 @@ def relationships():
                         AND NOT n1.scientificName = n2.scientificName
                         CREATE (n1)-[:Related]->(n2)"""
     create_location = """MATCH (f:Fishes),(r:Reserves)
-                        WHERE f.decimalLongitude <= r.xCoord
-                        AND f.decimalLatitude >= r.yCoord
+                        WHERE f.decimalLongitude <= (r.xCoord + (toFloat(r.GAZ_AREA)))
+                        AND f.decimalLongitude >= (r.xCoord - (toFloat(r.GAZ_AREA))) 
+                        AND f.decimalLatitude <= (r.yCoord)
+                        AND f.decimalLatitude >= (r.yCoord)
                         CREATE (f)-[:Sighted]->(r)"""
     with driver.session() as session:
         with session.begin_transaction() as relationship:
             relationship.run(create_same)
+            print("Fish: 'Same' Complete")
             relationship.run(create_relation)
+            print("Fish: 'Family' Complete")
             relationship.run(create_location)
+            print("Reserve: 'Sighted' Complete")
 
-upload_csv()
-indexes()
-relationships()
+#upload_csv()
+#indexes()
+#relationships()
