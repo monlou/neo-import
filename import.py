@@ -18,7 +18,8 @@ fish_indexes = ["CREATE INDEX ON :Fishes(scientificName);",
 # Upload CSV files to Graph Database
 def upload_csv(file):
     # Create transaction string
-    load_csv = "USING PERIODIC COMMIT 10000 LOAD CSV WITH HEADERS FROM '"
+    periodic_commit = "USING PERIODIC COMMIT 10000"
+    load_csv = "LOAD CSV WITH HEADERS FROM '"
     fish_db_setup = """' AS row 
                    CREATE (n:Fishes) 
                    SET n = row, 
@@ -31,14 +32,13 @@ def upload_csv(file):
                    n.basisOfRecord = row.basisOfRecord, 
                    n.family = row.family """
     fish_csv = load_csv + file + fish_db_setup
-    # Setup indexes for creating relationships
     # Run Cypher query
     with driver.session() as session:
         with session.begin_transaction() as upload:
             upload.run(fish_csv)
 
 # Add relationships between related fish
-def relationships(edge):
+def relationships():
     create_relation = """MATCH (n:Fishes),(m:Fishes)
                         WHERE n.family = m.family
                         AND NOT n.scientificName = m.scientificName
@@ -51,12 +51,11 @@ def relationships(edge):
                         WHERE abs(tofloat(left(n.eventDate,4)) - tofloat(left(m.eventDate,4))) < 1 
                         AND n <> m
                         CREATE (n)-[:SameYear]->(m)"""
-
-    if edge == 'relation':
-        return create_relation
-    elif edge == 'location':
-        return create_location
-    elif edge == 'time':
-        return create_time
+    # Run Cypher query
+    with driver.session() as session:
+        with session.begin_transaction() as upload:
+            #upload.run(create_relation)
+            upload.run(create_location)
+            upload.run(create_time)
 
 upload_csv(fish_brief)
