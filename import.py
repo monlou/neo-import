@@ -1,5 +1,4 @@
 from neo4j.v1 import GraphDatabase
-import csv
 
 # Connect to Neo4j
 uri = "bolt://localhost:7687/db"
@@ -10,12 +9,6 @@ fish_brief = "file:///CSVs/Fishes-brief.csv"
 fish_file = "file:///CSVs/Fishes-Shortened.csv"
 mammals_file = "file:///CSVs/Mammals.csv"
 conservation_file = "file:///CSVs/Conservation.csv"
-
-# Convert Shapefiles to CSV
-#with open('/home/ricckli/Desktop/example.tsv', 'rb') as csvfile:
-#    reader = csv.reader(csvfile, delimiter='\t') #my example uses the tab as delimiter
-    #for line in reader:
-        #print '; '.join(line)
 
 # Upload CSV files to Graph Database
 def upload_csv():
@@ -69,21 +62,6 @@ def relationships():
             relationship.run(create_relation)
             relationship.run(create_location)
 
-def nodes():
-    begin_node = 'CREATE (a:Family { Name : "'
-    end_node = '" })'
-    families = ['Galaxiidae', 'Pseudaphritidae', 'Percichthyidae', 'Eleotridae', 'Monacanthidae',
-                'Odacidae']
-    create_relation = """MATCH (n:Fishes),(f:Familiy)
-                            WHERE n.family = f.Name
-                            CREATE (n)-[:Fam]->(f)"""
-    with driver.session() as session:
-        with session.begin_transaction() as nodes:
-            for i in families:
-                nodes.run(begin_node + i + end_node)
-            nodes.run(create_relation)
-
 upload_csv()
 #indexes()
 relationships()
-#nodes()
