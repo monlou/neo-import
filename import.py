@@ -1,39 +1,26 @@
 from neo4j.v1 import GraphDatabase
+import csv
 
 # Connect to Neo4j
-print("Connecting to database")
 uri = "bolt://localhost:7687/db"
 driver = GraphDatabase.driver(uri, encryption=(False))
 
 # Document Files
 fish_brief = "file:///CSVs/Fishes-brief.csv"
 fish_file = "file:///CSVs/Fishes-Shortened.csv"
-reserves_file = "file:///CSVs/marine_reserves.csv"
+mammals_file = "file:///CSVs/Mammals.csv"
+conservation_file = "file:///CSVs/Conservation.csv"
+
+# Convert Shapefiles to CSV
+#with open('/home/ricckli/Desktop/example.tsv', 'rb') as csvfile:
+#    reader = csv.reader(csvfile, delimiter='\t') #my example uses the tab as delimiter
+    #for line in reader:
+        #print '; '.join(line)
 
 # Upload CSV files to Graph Database
 def upload_csv():
-    print("Uploading CSV files")
     # Create transaction string
     load_csv = "LOAD CSV WITH HEADERS FROM '"
-    reserve_db_setup = """' AS row 
-                   CREATE (n:Reserves) 
-                   SET n = row, 
-                   n.PA_ID = row.paID,
-                   n.NAME = row.name,
-                   n.TYPE = row.type,
-                   n.GAZ_AREA = row.gazArea,
-                   n.GAZ_DATE = row.gazDate,
-                   n.LATEST_GAZ = row.latestGaz,
-                   n.AUTHORITY = row.authority,
-                   n.GOVERNANCE = row.governance,
-                   n.ENVIRON = row.environment,
-                   n.X_COORD = row.xCoord,
-                   n.Y_COORD = row.yCoord,
-                   n.MGT_PLAN = row.management,
-                   n.RES_NUMBER = row.resNumber,
-                   n.ZONE_TYPE = row.zoneType,
-                   n.SHAPE_AREA = row.shapeArea,
-                   n.SHAPE_LEN = row.shapeLength"""
     fish_db_setup = """' AS row 
                    CREATE (n:Fishes) 
                    SET n = row, 
@@ -46,61 +33,57 @@ def upload_csv():
                    n.basisOfRecord = row.basisOfRecord, 
                    n.family = row.family """
     fish_csv = load_csv + fish_file + fish_db_setup
-    reserves_csv = load_csv + reserves_file + reserve_db_setup
-
     # Setup indexes for creating relationships
     # Run Cypher query
     with driver.session() as session:
         with session.begin_transaction() as upload:
             upload.run(fish_csv)
-            upload.run(reserves_csv)
 
 def indexes():
-    print("Creating indexes")
     fish_indexes = ["CREATE INDEX ON :Fishes(scientificName);",
                     "CREATE INDEX ON :Fishes(recordID);",
                     "CREATE INDEX ON :Fishes(decimalLatitude);",
                     "CREATE INDEX ON :Fishes(decimalLongitude);",
                     "CREATE INDEX ON :Fishes(eventDate);",
                     "CREATE INDEX ON :Fishes(family);"]
-    reserve_indexes = ["CREATE INDEX ON :Reserves(name);",
-                    "CREATE INDEX ON :Reserves(type);",
-                    "CREATE INDEX ON :Reserves(xCoord);",
-                    "CREATE INDEX ON :Reserves(yCoord);",
-                    "CREATE INDEX ON :Reserves(gazArea);"]
     with driver.session() as session:
         with session.begin_transaction() as index:
             for i in fish_indexes:
                 index.run(i)
-            for j in reserve_indexes:
-                index.run(j)
 
 # Add relationships between related fish
 def relationships():
     print("Building relationships")
-    create_same = """MATCH (n1:Fishes),(n2:Fishes)
-                        WHERE n1.scientificName = n2.scientificName 
-                        AND NOT n1.recordID = n2.recordID
-                        CREATE (n1)-[:Same]->(n2)"""
-    create_relation = """MATCH (n1:Fishes),(n2:Fishes)
-                        WHERE n1.family = n2.family
-                        AND NOT n1.scientificName = n2.scientificName
-                        CREATE (n1)-[:Related]->(n2)"""
-    create_location = """MATCH (f:Fishes),(r:Reserves)
-                        WHERE f.decimalLongitude <= (r.xCoord + (toFloat(r.GAZ_AREA)))
-                        AND f.decimalLongitude >= (r.xCoord - (toFloat(r.GAZ_AREA))) 
-                        AND f.decimalLatitude <= (r.yCoord)
-                        AND f.decimalLatitude >= (r.yCoord)
-                        CREATE (f)-[:Sighted]->(r)"""
+    create_relation = """MATCH (n:Fishes),(m:Fishes)
+                        WHERE n.family = m.family
+                        AND NOT n.scientificName = m.scientificName
+                        CREATE (n)-[:Related]->(m)"""
+    create_location = """MATCH (n:Fishes),(m:Fishes)
+                        WHERE n.decimalLongitude <= toFloat(m.decimalLongitude) +1.0
+                        AND n.decimalLongitude >= toFloat(m.decimalLatitude) -1.0
+                        AND n.decimalLatitude <= toFloat(m.decimalLatitude) +1.0
+                        AND n.decimalLatitude >= toFloat(m.decimalLatitude) -1.0
+                        CREATE (n)-[:Sighted]->(m)"""
     with driver.session() as session:
         with session.begin_transaction() as relationship:
-            relationship.run(create_same)
-            print("Fish: 'Same' Complete")
             relationship.run(create_relation)
-            print("Fish: 'Family' Complete")
             relationship.run(create_location)
-            print("Reserve: 'Sighted' Complete")
 
-#upload_csv()
+def nodes():
+    begin_node = 'CREATE (a:Family { Name : "'
+    end_node = '" })'
+    families = ['Galaxiidae', 'Pseudaphritidae', 'Percichthyidae', 'Eleotridae', 'Monacanthidae',
+                'Odacidae']
+    create_relation = """MATCH (n:Fishes),(f:Familiy)
+                            WHERE n.family = f.Name
+                            CREATE (n)-[:Fam]->(f)"""
+    with driver.session() as session:
+        with session.begin_transaction() as nodes:
+            for i in families:
+                nodes.run(begin_node + i + end_node)
+            nodes.run(create_relation)
+
+upload_csv()
 #indexes()
-#relationships()
+relationships()
+#nodes()
