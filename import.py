@@ -59,3 +59,4 @@ def relationships():
             upload.run(create_time)
 
 upload_csv(fish_brief)
+relationships()
