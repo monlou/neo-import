@@ -7,13 +7,18 @@ driver = GraphDatabase.driver(uri, encryption=(False))
 # Document Files
 fish_brief = "file:///CSVs/Fishes-brief.csv"
 fish_file = "file:///CSVs/Fishes-Shortened.csv"
-mammals_file = "file:///CSVs/Mammals.csv"
-conservation_file = "file:///CSVs/Conservation.csv"
+
+fish_indexes = ["CREATE INDEX ON :Fishes(scientificName);",
+                    "CREATE INDEX ON :Fishes(recordID);",
+                    "CREATE INDEX ON :Fishes(decimalLatitude);",
+                    "CREATE INDEX ON :Fishes(decimalLongitude);",
+                    "CREATE INDEX ON :Fishes(eventDate);",
+                    "CREATE INDEX ON :Fishes(family);"]
 
 # Upload CSV files to Graph Database
-def upload_csv():
+def upload_csv(file):
     # Create transaction string
-    load_csv = "LOAD CSV WITH HEADERS FROM '"
+    load_csv = "USING PERIODIC COMMIT 10000 LOAD CSV WITH HEADERS FROM '"
     fish_db_setup = """' AS row 
                    CREATE (n:Fishes) 
                    SET n = row, 
@@ -25,43 +30,33 @@ def upload_csv():
                    n.eventDate = row.eventDate, 
                    n.basisOfRecord = row.basisOfRecord, 
                    n.family = row.family """
-    fish_csv = load_csv + fish_file + fish_db_setup
+    fish_csv = load_csv + file + fish_db_setup
     # Setup indexes for creating relationships
     # Run Cypher query
     with driver.session() as session:
         with session.begin_transaction() as upload:
             upload.run(fish_csv)
 
-def indexes():
-    fish_indexes = ["CREATE INDEX ON :Fishes(scientificName);",
-                    "CREATE INDEX ON :Fishes(recordID);",
-                    "CREATE INDEX ON :Fishes(decimalLatitude);",
-                    "CREATE INDEX ON :Fishes(decimalLongitude);",
-                    "CREATE INDEX ON :Fishes(eventDate);",
-                    "CREATE INDEX ON :Fishes(family);"]
-    with driver.session() as session:
-        with session.begin_transaction() as index:
-            for i in fish_indexes:
-                index.run(i)
-
 # Add relationships between related fish
-def relationships():
-    print("Building relationships")
+def relationships(edge):
     create_relation = """MATCH (n:Fishes),(m:Fishes)
                         WHERE n.family = m.family
                         AND NOT n.scientificName = m.scientificName
                         CREATE (n)-[:Related]->(m)"""
     create_location = """MATCH (n:Fishes),(m:Fishes)
-                        WHERE n.decimalLongitude <= toFloat(m.decimalLongitude) +1.0
-                        AND n.decimalLongitude >= toFloat(m.decimalLatitude) -1.0
-                        AND n.decimalLatitude <= toFloat(m.decimalLatitude) +1.0
-                        AND n.decimalLatitude >= toFloat(m.decimalLatitude) -1.0
-                        CREATE (n)-[:Sighted]->(m)"""
-    with driver.session() as session:
-        with session.begin_transaction() as relationship:
-            relationship.run(create_relation)
-            relationship.run(create_location)
+                        WHERE abs(tofloat(n.decimalLatitude) - tofloat(m.decimalLatitude)) < 0.1
+                        AND n <> m
+                        CREATE (n)-[:SightedNearby]->(m)"""
+    create_time = """MATCH (n:Fishes),(m:Fishes)
+                        WHERE abs(tofloat(left(n.eventDate,4)) - tofloat(left(m.eventDate,4))) < 1 
+                        AND n <> m
+                        CREATE (n)-[:SameYear]->(m)"""
 
-upload_csv()
-#indexes()
-relationships()
+    if edge == 'relation':
+        return create_relation
+    elif edge == 'location':
+        return create_location
+    elif edge == 'time':
+        return create_time
+
+upload_csv(fish_brief)
