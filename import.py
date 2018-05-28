@@ -46,7 +46,7 @@ def createNodes():
     # Run Cypher query
     with driver.session() as session:
         with session.begin_transaction() as upload:
-            #upload.run(fish_csv)
+            upload.run(fish_csv)
             upload.run(family_csv)
 
 def mergeDuplicates():
@@ -72,13 +72,28 @@ def createRelationships():
                         WHERE abs(tofloat(left(n.eventDate,4)) - tofloat(left(m.eventDate,4))) < 1
                         AND n <> m
                         CREATE (n)-[:SameYear]->(m)"""
+    create_nearby = """MATCH (n:Fishes),(m:Fishes)
+                        WHERE sqrt((tofloat(n.decimalLatitude) - tofloat(m.decimalLatitude)) 
+                            * (tofloat(n.decimalLatitude) - tofloat(m.decimalLatitude)) 
+                            + (tofloat(n.decimalLongitude) - tofloat(m.decimalLongitude)) 
+                            * (tofloat(n.decimalLongitude) - tofloat(m.decimalLongitude))) <= 0.5
+                        AND abs(toFloat(substring(n.eventDate, 0, 4)) * 12 + toFloat(substring(n.eventDate, 5, 2)) 
+                            - toFloat(substring(m.eventDate, 0, 4)) * 12 + toFloat(substring(m.eventDate, 5, 2))) <= 1
+                        CREATE (n)-[r:Nearby 
+                            {distance: sqrt((tofloat(n.decimalLatitude) - tofloat(m.decimalLatitude)) 
+                                * (tofloat(n.decimalLatitude) - tofloat(m.decimalLatitude)) 
+                                + (tofloat(n.decimalLongitude) - tofloat(m.decimalLongitude)) 
+                                * (tofloat(n.decimalLongitude) - tofloat(m.decimalLongitude))),
+                            timeDiff: abs(toFloat(substring(n.eventDate, 0, 4)) * 12 + toFloat(substring(n.eventDate, 5, 2)) 
+                                - toFloat(substring(m.eventDate, 0, 4)) * 12 + toFloat(substring(m.eventDate, 5, 2)))}]->(m)"""
     # Run Cypher query
     with driver.session() as session:
         with session.begin_transaction() as upload:
             upload.run(create_relation)
-            upload.run(create_location)
-            upload.run(create_time)
+            #upload.run(create_location)
+            #upload.run(create_time)
+            upload.run(create_nearby)
 
-#createNodes()
-#mergeDuplicates()
+createNodes()
+mergeDuplicates()
 createRelationships()
