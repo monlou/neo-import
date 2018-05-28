@@ -59,5 +59,26 @@ def mergeDuplicates():
         with session.begin_transaction() as merge:
             merge.run(merge_nodes)
 
+# Add relationships between related fish
+def createRelationships():
+    create_relation = """MATCH (n:Fishes),(m:Families)
+                        WHERE n.family = m.family
+                        CREATE (n)-[:Related]->(m)"""
+    create_location = """MATCH (n:Fishes),(m:Fishes)
+                        WHERE abs(tofloat(n.decimalLatitude) - tofloat(m.decimalLatitude)) < 0.1
+                        AND n <> m
+                        CREATE (n)-[:SightedNearby]->(m)"""
+    create_time = """MATCH (n:Fishes),(m:Fishes)
+                        WHERE abs(tofloat(left(n.eventDate,4)) - tofloat(left(m.eventDate,4))) < 1
+                        AND n <> m
+                        CREATE (n)-[:SameYear]->(m)"""
+    # Run Cypher query
+    with driver.session() as session:
+        with session.begin_transaction() as upload:
+            upload.run(create_relation)
+            upload.run(create_location)
+            upload.run(create_time)
+
 #createNodes()
-mergeDuplicates()
+#mergeDuplicates()
+createRelationships()
