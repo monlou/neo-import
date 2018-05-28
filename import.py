@@ -8,7 +8,7 @@ driver = GraphDatabase.driver(uri, encryption=(False))
 file = "file:///CSVs/Fishes-Shortened.csv"
 
 # Upload CSV files to Graph Database
-def create_nodes():
+def createNodes():
     # Create transaction string
     periodic_commit = "USING PERIODIC COMMIT 10000"
     load_csv = "LOAD CSV WITH HEADERS FROM '"
@@ -46,7 +46,18 @@ def create_nodes():
     # Run Cypher query
     with driver.session() as session:
         with session.begin_transaction() as upload:
-            upload.run(fish_csv)
+            #upload.run(fish_csv)
             upload.run(family_csv)
 
-#upload_csv()
+def mergeDuplicates():
+    merge_nodes = """MATCH (n:Families)
+                WITH n.family AS family, COLLECT(n) AS nodelist, COUNT(*) AS count
+                WHERE count > 1
+                CALL apoc.refactor.mergeNodes(nodelist) YIELD node
+                RETURN node"""
+    with driver.session() as session:
+        with session.begin_transaction() as merge:
+            merge.run(merge_nodes)
+
+#createNodes()
+mergeDuplicates()
