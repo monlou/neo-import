@@ -49,21 +49,26 @@ def createNodes():
             upload.run(fish_csv)
             upload.run(family_csv)
 
-def mergeDuplicates():
+def removeDuplicates():
     merge_nodes = """MATCH (n:Families)
                 WITH n.family AS family, COLLECT(n) AS nodelist, COUNT(*) AS count
                 WHERE count > 1
                 CALL apoc.refactor.mergeNodes(nodelist) YIELD node
                 RETURN node"""
+    remove_data = """"MATCH (n:Families) REMOVE n.scientificName, n.coordinateUncertaintyInMeters,
+                    n.decimalLatitude, n.decimalLongitude, n.eventDate, n.basisOfRecord, n.name, n.RecordID"""
     with driver.session() as session:
         with session.begin_transaction() as merge:
             merge.run(merge_nodes)
+            merge.run(remove_data)
 
 # Add relationships between related fish
 def createRelationships():
     create_relation = """MATCH (n:Fishes),(m:Families)
                         WHERE n.family = m.family
-                        CREATE (n)-[:Related]->(m)"""
+                        (n)-[r:Nearby 
+                            {family: n.family ,
+                            fish: n.scientificName}]->(m)"""
     create_location = """MATCH (n:Fishes),(m:Fishes)
                         WHERE abs(tofloat(n.decimalLatitude) - tofloat(m.decimalLatitude)) < 0.1
                         AND n <> m
@@ -94,6 +99,6 @@ def createRelationships():
             #upload.run(create_time)
             upload.run(create_nearby)
 
-createNodes()
+#createNodes()
 mergeDuplicates()
 createRelationships()
