@@ -20,7 +20,21 @@ def upload_csv(file):
     # Create transaction string
     periodic_commit = "USING PERIODIC COMMIT 10000"
     load_csv = "LOAD CSV WITH HEADERS FROM '"
+    family_db_setup = """' AS row
+                        CREATE (n:Families)
+                        SET n = row,
+                        n.family = row.family"""
     fish_db_setup = """' AS row 
+                       CREATE (n:Fishes) 
+                       SET n = row, 
+                       n.recordID = row.recordID,
+                       n.scientificName = row.scientificName, 
+                       n.decimalLatitude = row.decimalLatitude, 
+                       n.decimalLongitude = row.decimalLongitude, 
+                       n.coordinateUncertaintyInMeters = row.coordinateUncertaintyInMeters, 
+                       n.eventDate = row.eventDate, 
+                       n.family = row.family"""
+    full_fish_db_setup = """' AS row 
                    CREATE (n:Fishes) 
                    SET n = row, 
                    n.recordID = row.recordID,
@@ -29,19 +43,24 @@ def upload_csv(file):
                    n.decimalLongitude = row.decimalLongitude, 
                    n.coordinateUncertaintyInMeters = row.coordinateUncertaintyInMeters, 
                    n.eventDate = row.eventDate, 
-                   n.basisOfRecord = row.basisOfRecord, 
-                   n.family = row.family """
+                   n.species = row.species, 
+                   n.family = row.family, 
+                   n.kingdom = row.kingdom, 
+                   n.sex = row.sex, 
+                   n.lifeStage = row.lifeStage, 
+                   n.institution = row.institution"""
     fish_csv = load_csv + file + fish_db_setup
+    family_csv = load_csv + file + family_db_setup
     # Run Cypher query
     with driver.session() as session:
         with session.begin_transaction() as upload:
             upload.run(fish_csv)
+            upload.run(family_csv)
 
 # Add relationships between related fish
 def relationships():
-    create_relation = """MATCH (n:Fishes),(m:Fishes)
+    create_relation = """MATCH (n:Fishes),(m:Families)
                         WHERE n.family = m.family
-                        AND NOT n.scientificName = m.scientificName
                         CREATE (n)-[:Related]->(m)"""
     create_location = """MATCH (n:Fishes),(m:Fishes)
                         WHERE abs(tofloat(n.decimalLatitude) - tofloat(m.decimalLatitude)) < 0.1
@@ -54,9 +73,9 @@ def relationships():
     # Run Cypher query
     with driver.session() as session:
         with session.begin_transaction() as upload:
-            #upload.run(create_relation)
+            upload.run(create_relation)
             upload.run(create_location)
             upload.run(create_time)
 
-upload_csv(fish_brief)
+#upload_csv(fish_file)
 relationships()
