@@ -66,7 +66,7 @@ def removeDuplicates():
 def createRelationships():
     create_relation = """MATCH (n:Fishes),(m:Families)
                         WHERE n.family = m.family
-                        (n)-[r:Nearby 
+                        CREATE (n)-[r:Related 
                             {family: n.family ,
                             fish: n.scientificName}]->(m)"""
     create_location = """MATCH (n:Fishes),(m:Fishes)
